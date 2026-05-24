@@ -2,7 +2,7 @@ import network
 from time import sleep_ms
 from machine import Pin
 
-GITHUB_HTTPS_ADDRESS = "https://github.com/nicolasfala1se/esp_temp_sensor"
+GITHUB_HTTPS_ADDRESS = "https://github.com/nicolasfala1se/esp_IAQ_sensor"
 
 def wifi_connect( wifi_ssid, wifi_password, verbose=False):
     sta_if = network.WLAN(network.STA_IF)

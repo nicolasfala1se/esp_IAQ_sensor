@@ -1,9 +1,9 @@
 # MQTT temperature monitor.
-from main.umqtt.robust import MQTTClient
+from umqtt.robust import MQTTClient
 import main.bme680 as bme680
 from main.ota_updater import OTAUpdater
 from main.utils import wifi_connect, wifi_disconnect, led, GITHUB_HTTPS_ADDRESS
-from main.bme280 import BME280
+from main.bme280 import bme280 as BME280
 from main.rtos import rtos, rtos_task
 from main.schedule_file import schedule_table
 from main.oled_screen import oled_screen

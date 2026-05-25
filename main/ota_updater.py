@@ -138,30 +138,47 @@ class OTAUpdater:
         print('Version {} downloaded to {}'.format(version, self.modulepath(self.new_version_dir)))
 
     def _download_all_files(self, version, sub_dir=''):
+        import time
         url = 'https://api.github.com/repos/{}/contents/{}{}{}?ref=refs/tags/{}'.format(self.github_repo, self.github_src_dir, self.main_dir, sub_dir, version)
-        gc.collect() 
+        gc.collect()
         file_list = self.http_client.get(url)
         if file_list.status_code != 200:
             raise ValueError('GitHub API error {} for URL: {}'.format(file_list.status_code, url))
         file_list_json = file_list.json()
         if not isinstance(file_list_json, list):
             raise ValueError('GitHub API unexpected response: {}'.format(file_list_json))
-        for file in file_list_json:
-            path = self.modulepath(self.new_version_dir + '/' + file['path'].replace(self.main_dir + '/', '').replace(self.github_src_dir, ''))
-            if file['type'] == 'file':
-                gitPath = file['path']
-                print('\tDownloading: ', gitPath, 'to', path)
-                self._download_file(version, gitPath, path)
-            elif file['type'] == 'dir':
+
+        # Extract only the fields we need, then free the full JSON before any downloads
+        entries = [(f['type'], f['path'], f['name']) for f in file_list_json]
+        del file_list_json
+        gc.collect()
+
+        for ftype, fpath, fname in entries:
+            path = self.modulepath(self.new_version_dir + '/' + fpath.replace(self.main_dir + '/', '').replace(self.github_src_dir, ''))
+            if ftype == 'file':
+                print('\tDownloading: ', fpath, 'to', path)
+                self._download_file(version, fpath, path)
+                time.sleep_ms(2000)
+            elif ftype == 'dir':
                 print('Creating dir', path)
                 self.mkdir(path)
-                self._download_all_files(version, sub_dir + '/' + file['name'])
+                self._download_all_files(version, sub_dir + '/' + fname)
             gc.collect()
 
-        file_list.close()
-
     def _download_file(self, version, gitPath, path):
-        self.http_client.get('https://raw.githubusercontent.com/{}/{}/{}'.format(self.github_repo, version, gitPath), saveToFile=path)
+        import time
+        url = 'https://raw.githubusercontent.com/{}/{}/{}'.format(self.github_repo, version, gitPath)
+        for attempt in range(3):
+            try:
+                self.http_client.get(url, saveToFile=path)
+                return
+            except OSError as e:
+                print('Download error (attempt {}): {}'.format(attempt + 1, e))
+                if attempt < 2:
+                    gc.collect()
+                    time.sleep_ms(15000)
+                else:
+                    raise
 
     def _copy_secrets_file(self):
         if self.secrets_file:

@@ -7,7 +7,7 @@ class Response:
         self._encoding = 'utf-8'
         if saveToFile is not None:
             CHUNK_SIZE = 512 # bytes
-            with open(saveToFile, 'w') as outfile:
+            with open(saveToFile, 'wb') as outfile:
                 data = self._socket.read(CHUNK_SIZE)
                 while data:
                     outfile.write(data)
@@ -68,7 +68,10 @@ class HttpClient:
         if proto == 'http:':
             port = 80
         elif proto == 'https:':
-            import ussl
+            try:
+                import ussl as ssl
+            except ImportError:
+                import ssl
             port = 443
         else:
             raise ValueError('Unsupported protocol: ' + proto)
@@ -86,8 +89,27 @@ class HttpClient:
         try:
             s.connect(ai[-1])
             if proto == 'https:':
-                gc.collect()
-                s = ussl.wrap_socket(s, server_hostname=host)
+                import time
+                last_exc = None
+                for attempt in range(3):
+                    if attempt > 0:
+                        try:
+                            s.close()
+                        except OSError:
+                            pass
+                        gc.collect()
+                        time.sleep_ms(8000)
+                        s = usocket.socket(ai[0], ai[1], ai[2])
+                        s.connect(ai[-1])
+                    gc.collect()
+                    try:
+                        s = ssl.wrap_socket(s, server_hostname=host)
+                        last_exc = None
+                        break
+                    except OSError as e:
+                        last_exc = e
+                if last_exc:
+                    raise last_exc
             s.write(b'%s /%s HTTP/1.0\r\n' % (method, path))
             if not 'Host' in headers:
                 s.write(b'Host: %s\r\n' % host)

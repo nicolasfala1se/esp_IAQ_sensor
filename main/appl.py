@@ -161,7 +161,7 @@ class task1 (rtos_task):
             self.oled = oled_screen(i2c, DEFAULT_OLED_I2C_ADDR, unit=param1['UNIT'])
             sensor = 'BME680' if self.bme680IsConnected else 'BME280'
             self.oled.set_sensor_config(sensor)
-            self.oled.update_screen(self.wifi_valid,self.mqtt_valid, utime.localtime(), None, None, str_text=str_out )
+            self.oled.update_screen(self.wifi_valid, self.mqtt_valid, utime.localtime(), None, None, str_text=str_out, version=param1['VERSION'])
         else:
             print('! No i2c display')
 
@@ -317,6 +317,8 @@ def application(u_config):
             settime(int(u_config['UTC_OFS'])*60*60)
         except Exception as e:
             print("NTP sync failed:", e)
+
+    u_config['VERSION'] = OTAUpdater(GITHUB_HTTPS_ADDRESS).get_version('main')
 
     # convert counters
     wakeup_period = int(u_config['WAKEUP_PERIOD'])*1000

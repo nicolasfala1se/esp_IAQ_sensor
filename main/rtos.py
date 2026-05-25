@@ -40,10 +40,9 @@ class rtos_task:
             self.task_state = self.STATE_RUNNING
             try:
                 next(self.task_generator)
-            except Exception as StopIteration:
-                self.task_state = self.STATE_COMPLETE
-            else:
                 self.task_state = self.STATE_PENDING
+            except StopIteration:
+                self.task_state = self.STATE_COMPLETE
 
     # Task implementation
     # task definition should override 

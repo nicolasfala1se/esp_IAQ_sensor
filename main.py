@@ -25,11 +25,14 @@ def boot():
     print('Memory free', gc.mem_free())
 
     otaUpdater = OTAUpdater(GITHUB_HTTPS_ADDRESS, main_dir='main', secrets_file="secrets.py")
-    hasUpdated = otaUpdater.install_update_if_available()
-    if hasUpdated:
-        machine.reset()
-    else:
-        del(otaUpdater)
+    try:
+        hasUpdated = otaUpdater.install_update_if_available()
+        if hasUpdated:
+            machine.reset()
+    except OSError as e:
+        print('OTA check failed:', e)
+    finally:
+        del otaUpdater
         gc.collect()
 
     gc.collect()

@@ -145,16 +145,13 @@ class task1 (rtos_task):
             self.wifi_valid=True
 
             if param1['MQTT_CONF']:
+                self.c = MQTTClient(CLIENT_ID, param1['MQTT_SERVER'])
                 try:
-                    # create MQTT connection
-                    self.c = MQTTClient( CLIENT_ID, param1['MQTT_SERVER'] )
-                    # mqtt connection
                     self.c.connect()
-                except:
-                    print ("unable to connect to server")
-                    self.mqtt_valid = False
-                else:
                     self.mqtt_valid = True
+                except:
+                    print("unable to connect to MQTT server, will retry")
+                    self.mqtt_valid = False
             
         # OLED screen
         if self.oledIsConnected:
@@ -264,20 +261,20 @@ class task1 (rtos_task):
                         except Exception as e:
                             print("NTP sync failed:", e)
 
-                    l_mqtt_valid = self.mqtt_valid
-                    if l_mqtt_valid:
+                    if param1['MQTT_CONF']:
                         try:
-                            # valid measure
-                            self.c.publish( param1['NODE_NAME']+TOPIC_TEMPERATURE, temperature_str)
-                            self.c.publish( param1['NODE_NAME']+TOPIC_HUMIDITY, humidity_str)
-                            self.c.publish( param1['NODE_NAME']+TOPIC_PRESSURE, pressure_str)
+                            self.c.publish(param1['NODE_NAME']+TOPIC_TEMPERATURE, temperature_str)
+                            self.c.publish(param1['NODE_NAME']+TOPIC_HUMIDITY, humidity_str)
+                            self.c.publish(param1['NODE_NAME']+TOPIC_PRESSURE, pressure_str)
                             if iaq_str is not None:
-                                self.c.publish( param1['NODE_NAME']+TOPIC_IAQ, iaq_str)
+                                self.c.publish(param1['NODE_NAME']+TOPIC_IAQ, iaq_str)
+                            self.mqtt_valid = True
                         except:
                             print("Cannot publish measurements")
-                            l_mqtt_valid = False
+                            self.mqtt_valid = False
                 else:
-                    l_mqtt_valid = False        
+                    self.mqtt_valid = False
+                l_mqtt_valid = self.mqtt_valid
             
                 if self.debug_p: 
                     print("Temperature:", temperature_str)

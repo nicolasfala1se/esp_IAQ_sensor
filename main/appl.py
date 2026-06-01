@@ -141,8 +141,10 @@ class task1 (rtos_task):
         self.ntp_ticks = 0
         if param1['WIFI_CONF']:
             import main.secrets as secrets
-            wifi_connect(secrets.WIFI_SSID, secrets.WIFI_PASS)
-            self.wifi_valid=True
+            self._wifi_ssid = secrets.WIFI_SSID
+            self._wifi_pass = secrets.WIFI_PASS
+            wifi_connect(self._wifi_ssid, self._wifi_pass)
+            self.wifi_valid = True
 
             if param1['MQTT_CONF']:
                 self.c = MQTTClient(CLIENT_ID, param1['MQTT_SERVER'])
@@ -246,10 +248,15 @@ class task1 (rtos_task):
                 humidity_str = "{:.02f}".format(h)
                 pressure_str = "{:.01f}".format(p)
 
-                # verify wifi connection
+                # verify wifi connection, reconnect if dropped
                 sta_if = network.WLAN(network.STA_IF)
+                if not sta_if.isconnected() and param1['WIFI_CONF']:
+                    try:
+                        wifi_connect(self._wifi_ssid, self._wifi_pass)
+                    except Exception as e:
+                        print("WiFi reconnect failed:", e)
                 self.wifi_valid = sta_if.isconnected()
-                del(sta_if)
+                del sta_if
 
                 if self.wifi_valid:
                     self.ntp_ticks += 1
@@ -262,16 +269,23 @@ class task1 (rtos_task):
                             print("NTP sync failed:", e)
 
                     if param1['MQTT_CONF']:
-                        try:
-                            self.c.publish(param1['NODE_NAME']+TOPIC_TEMPERATURE, temperature_str)
-                            self.c.publish(param1['NODE_NAME']+TOPIC_HUMIDITY, humidity_str)
-                            self.c.publish(param1['NODE_NAME']+TOPIC_PRESSURE, pressure_str)
-                            if iaq_str is not None:
-                                self.c.publish(param1['NODE_NAME']+TOPIC_IAQ, iaq_str)
-                            self.mqtt_valid = True
-                        except:
-                            print("Cannot publish measurements")
-                            self.mqtt_valid = False
+                        if not self.mqtt_valid:
+                            try:
+                                self.c.connect()
+                                self.mqtt_valid = True
+                            except Exception as e:
+                                print("MQTT reconnect failed:", e)
+                        if self.mqtt_valid:
+                            try:
+                                self.c.publish(param1['NODE_NAME']+TOPIC_TEMPERATURE, temperature_str)
+                                self.c.publish(param1['NODE_NAME']+TOPIC_HUMIDITY, humidity_str)
+                                self.c.publish(param1['NODE_NAME']+TOPIC_PRESSURE, pressure_str)
+                                if iaq_str is not None:
+                                    self.c.publish(param1['NODE_NAME']+TOPIC_IAQ, iaq_str)
+                                self.mqtt_valid = True
+                            except:
+                                print("Cannot publish measurements")
+                                self.mqtt_valid = False
                 else:
                     self.mqtt_valid = False
                 l_mqtt_valid = self.mqtt_valid

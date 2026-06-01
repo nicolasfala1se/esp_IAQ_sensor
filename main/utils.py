@@ -1,17 +1,20 @@
 import network
-from time import sleep_ms
+from time import sleep_ms, ticks_ms, ticks_diff
 from machine import Pin
 
 GITHUB_HTTPS_ADDRESS = "https://github.com/nicolasfala1se/esp_IAQ_sensor"
 
-def wifi_connect(wifi_ssid, wifi_password, verbose=False):
+def wifi_connect(wifi_ssid, wifi_password, verbose=False, timeout_ms=15000):
     sta_if = network.WLAN(network.STA_IF)
     if not sta_if.isconnected():
         if verbose:
             print('connecting to network...')
         sta_if.active(True)
         sta_if.connect(wifi_ssid, wifi_password)
+        t0 = ticks_ms()
         while not sta_if.isconnected():
+            if ticks_diff(ticks_ms(), t0) > timeout_ms:
+                raise OSError('WiFi connect timeout')
             sleep_ms(200)
         if verbose:
             print('network config:', sta_if.ifconfig())

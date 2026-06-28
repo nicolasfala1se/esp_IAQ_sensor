@@ -36,9 +36,18 @@ RUNTIME_FILE = 'runtime.json'
 I2C_SCL_PIN_NUMBER = 18
 I2C_SDA_PIN_NUMBER = 5
 
-DEFAULT_OLED_I2C_ADDR = 60  #0x3c
-DEFAULT_BME280_I2C_ADDR  = 118 #0x76
-DEFAULT_BME680_I2C_ADDR  = 119 #0x77
+DEFAULT_OLED_I2C_ADDR   = 60   # 0x3c
+DEFAULT_BME280_I2C_ADDR = 118  # 0x76
+DEFAULT_BME680_I2C_ADDR = 119  # 0x77
+
+LCD_SPI_BUS  = 1   # HSPI — SCK=14, MOSI=13 (non-conflicting with I2C SCL=18/SDA=5)
+LCD_SPI_SCK  = 14
+LCD_SPI_MOSI = 13
+LCD_SPI_CS   = 15
+LCD_SPI_DC   = 27
+LCD_SPI_RST  = 26
+LCD_SPI_BL   = 25
+LCD_Y_OFFSET = 35  # 240x280 panels are a 240x320 die; visible rows start at controller row 20
 
 def _load_runtime():
     try:
@@ -138,6 +147,27 @@ class task1 (rtos_task):
         # program execution
         if self.debug_p: print("Node: ",param1['NODE_NAME'])
         
+        # Display — try OLED (I2C) first, fall back to LCD (SPI)
+        # Initialized before WiFi/MQTT so the logo is visible during connection.
+        self.oled = None
+        if self.oledIsConnected:
+            self.oled = oled_screen(i2c, DEFAULT_OLED_I2C_ADDR, unit=param1['UNIT'])
+        else:
+            try:
+                from main.lcd_screen import lcd_screen
+                spi = machine.SPI(LCD_SPI_BUS, baudrate=40000000,
+                                  sck=machine.Pin(LCD_SPI_SCK),
+                                  mosi=machine.Pin(LCD_SPI_MOSI))
+                self.oled = lcd_screen(spi, LCD_SPI_CS, LCD_SPI_DC,
+                                       LCD_SPI_RST, LCD_SPI_BL, unit=param1['UNIT'],
+                                       y_offset=LCD_Y_OFFSET)
+                self.oledIsConnected = True
+            except Exception as e:
+                print('LCD init failed:', e)
+                print('! No display')
+        if self.oled:
+            self.oled.load_logo()
+
         self.ntp_ticks = 0
         if param1['WIFI_CONF']:
             import main.secrets as secrets
@@ -154,15 +184,11 @@ class task1 (rtos_task):
                 except:
                     print("unable to connect to MQTT server, will retry")
                     self.mqtt_valid = False
-            
-        # OLED screen
-        if self.oledIsConnected:
-            self.oled = oled_screen(i2c, DEFAULT_OLED_I2C_ADDR, unit=param1['UNIT'])
+
+        if self.oled:
             sensor = 'BME680' if self.bme680IsConnected else 'BME280'
             self.oled.set_sensor_config(sensor)
             self.oled.update_screen(self.wifi_valid, self.mqtt_valid, utime.localtime(), None, None, str_text=str_out, version=param1['VERSION'])
-        else:
-            print('! No i2c display')
 
 # Task body
 #

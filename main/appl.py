@@ -165,9 +165,6 @@ class task1 (rtos_task):
             except Exception as e:
                 print('LCD init failed:', e)
                 print('! No display')
-        if self.oled:
-            self.oled.load_logo()
-
         self.ntp_ticks = 0
         if param1['WIFI_CONF']:
             import main.secrets as secrets

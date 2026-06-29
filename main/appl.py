@@ -1,15 +1,11 @@
 # MQTT temperature monitor.
 from umqtt.robust import MQTTClient
-import main.bme680 as bme680
-from main.ota_updater import OTAUpdater
 from main.utils import wifi_connect, wifi_disconnect, led, GITHUB_HTTPS_ADDRESS
-from main.bme280 import bme280 as BME280
 from main.rtos import rtos, rtos_task
 from main.schedule_file import schedule_table
-from main.oled_screen import oled_screen
 from main.ntptime import settime
 
-import machine, time, micropython, framebuf, utime, network
+import machine, micropython, utime, network
 from ubinascii import hexlify
 import ujson as json
 import gc
@@ -109,6 +105,7 @@ class task1 (rtos_task):
         # BME280
         if self.bme280IsConnected:
             try:
+                from main.bme280 import bme280 as BME280
                 self.bme280 = BME280.BME280(i2c=i2c, mode=BME280.BME280_OSAMPLE_1, address=DEFAULT_BME280_I2C_ADDR)
             except:
                 self.bme280IsConnected = False
@@ -120,6 +117,7 @@ class task1 (rtos_task):
 
         if self.bme680IsConnected:
             try:
+                import main.bme680 as bme680
                 self.bme680 = bme680.BME680(i2c_addr=bme680.constants.I2C_ADDR_SECONDARY, i2c_device=i2c)
                 self.bme680.set_humidity_oversample(bme680.constants.OS_2X)
                 self.bme680.set_pressure_oversample(bme680.constants.OS_4X)
@@ -151,6 +149,7 @@ class task1 (rtos_task):
         # Initialized before WiFi/MQTT so the logo is visible during connection.
         self.oled = None
         if self.oledIsConnected:
+            from main.oled_screen import oled_screen
             self.oled = oled_screen(i2c, DEFAULT_OLED_I2C_ADDR, unit=param1['UNIT'])
         else:
             try:
@@ -328,22 +327,7 @@ class task1 (rtos_task):
             gc.collect()
             yield None
 
-class updater_task(rtos_task):
-    """ implementation of the updater task """
-    updater = None
-
-    def task_init(self,param1):
-        print("Init updater task")
-        self.updater = OTAUpdater(GITHUB_HTTPS_ADDRESS)
-
-    def task_body(self,param1):
-        while True:
-            print('Checking for update...')
-            if self.updater.check_for_update_to_install_during_next_reboot()==True:
-                machine.reset()
-            yield None
-
-def application(u_config): 
+def application(u_config):
     gc.collect()
 
     if u_config['WIFI_CONF']:
@@ -352,13 +336,13 @@ def application(u_config):
         except Exception as e:
             print("NTP sync failed:", e)
 
+    from main.ota_updater import OTAUpdater
     u_config['VERSION'] = OTAUpdater(GITHUB_HTTPS_ADDRESS).get_version('main')
 
     # convert counters
     wakeup_period = int(u_config['WAKEUP_PERIOD'])*1000
     t1=task1(priority=2, param1=u_config)
-    t2=updater_task(priority=1)
-    task_list = [t1,t2]
+    task_list = [t1]
     r = rtos(s_table=schedule_table, t_list=task_list )   # configure OS wih static configuration
     # timer 1 used to scheduled the first execution
     tim = machine.Timer(1)

@@ -1,5 +1,3 @@
-import machine
-from main.oled_screen import oled_screen
 
 _SCL = 18
 _SDA = 5
@@ -16,8 +14,10 @@ _LCD_Y_OFFSET = 35
 
 
 def show():
+    import machine
     i2c = machine.I2C(scl=machine.Pin(_SCL), sda=machine.Pin(_SDA), freq=400000)
     if _OLED_ADDR in i2c.scan():
+        from main.oled_screen import oled_screen
         oled = oled_screen(i2c, _OLED_ADDR)
         oled.load_logo()
         del oled
@@ -32,6 +32,8 @@ def show():
                              y_offset=_LCD_Y_OFFSET)
             lcd.load_logo()
             del lcd
+            spi.deinit()
+            del spi
         except Exception as e:
             print('LCD splash failed:', e)
     del i2c

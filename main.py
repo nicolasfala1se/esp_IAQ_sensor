@@ -4,7 +4,9 @@ def init_screen():
     import sys, gc
     import main.splash as splash
     splash.show()
-    del sys.modules['main.splash']
+    for mod in ('main.splash', 'main.lcd_screen', 'main.freesans25',
+                'main.calibri10', 'main.oled_screen'):
+        sys.modules.pop(mod, None)
     gc.collect()
 
 def boot():
@@ -29,22 +31,27 @@ def boot():
         hasUpdated = otaUpdater.install_update_if_available()
         if hasUpdated:
             machine.reset()
-    except OSError as e:
+    except Exception as e:
         print('OTA check failed:', e)
     finally:
         del otaUpdater
+        import sys
+        for mod in ('main.ota_updater', 'main.httpclient'):
+            sys.modules.pop(mod, None)
         gc.collect()
-
-    gc.collect()
 
 def start_app():
     # execute application
-    from main.appl import application
     from main.review_config import collect_u_config
-    import time, gc
+    import sys, gc
 
     u_config = collect_u_config()
 
+    for mod in ('main.review_config', 'main.config_file', 'user_config'):
+        sys.modules.pop(mod, None)
+    gc.collect()
+
+    from main.appl import application
     print('Memory free in application', gc.mem_free())
     application(u_config)
 

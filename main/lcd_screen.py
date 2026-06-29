@@ -155,7 +155,7 @@ class lcd_screen:
 
     def load_logo(self):
         self._tft.fill(_BG)
-        self._draw_str(font25, "MqttS1",    4,  80, _FG, scale=2)
+        self._draw_str(font25, "MqttS2",    4,  80, _FG, scale=2)
         self._draw_str(font10, "Loading...", 4, 130, _GRAY, scale=2)
 
     def set_sensor_config(self, sensor):

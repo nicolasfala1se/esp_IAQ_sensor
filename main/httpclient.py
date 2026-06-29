@@ -87,6 +87,7 @@ class HttpClient:
 
         s = usocket.socket(ai[0], ai[1], ai[2])
         try:
+            s.settimeout(30)
             s.connect(ai[-1])
             if proto == 'https:':
                 import time
@@ -100,6 +101,7 @@ class HttpClient:
                         gc.collect()
                         time.sleep_ms(8000)
                         s = usocket.socket(ai[0], ai[1], ai[2])
+                        s.settimeout(30)
                         s.connect(ai[-1])
                     gc.collect()
                     try:

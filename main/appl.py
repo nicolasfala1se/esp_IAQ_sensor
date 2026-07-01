@@ -45,6 +45,19 @@ LCD_SPI_RST  = 26
 LCD_SPI_BL   = 25
 LCD_Y_OFFSET = 35  # 240x280 panels are a 240x320 die; visible rows start at controller row 20
 
+_BTN_PIN = 0          # GPIO0 = BOOT button, active LOW, internal pull-up
+_BTN_SAMPLES = 5      # majority-vote debounce: number of samples
+_BTN_SAMPLE_MS = 10   # ms between samples (total window = 50 ms)
+
+def _btn_pressed(pin):
+    """Return True if button is held down (majority of samples read LOW)."""
+    low = 0
+    for _ in range(_BTN_SAMPLES):
+        if not pin.value():
+            low += 1
+        utime.sleep_ms(_BTN_SAMPLE_MS)
+    return low > _BTN_SAMPLES // 2
+
 def _load_runtime():
     try:
         with open(RUNTIME_FILE) as f:
@@ -164,6 +177,7 @@ class task1 (rtos_task):
             except Exception as e:
                 print('LCD init failed:', e)
                 print('! No display')
+        self._btn = machine.Pin(_BTN_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
         self.ntp_ticks = 0
         if param1['WIFI_CONF']:
             import main.secrets as secrets
@@ -171,6 +185,9 @@ class task1 (rtos_task):
             self._wifi_pass = secrets.WIFI_PASS
             wifi_connect(self._wifi_ssid, self._wifi_pass)
             self.wifi_valid = True
+            if self.oled:
+                ip = network.WLAN(network.STA_IF).ifconfig()[0]
+                self.oled.set_system_info(ip, param1['NODE_NAME'])
 
             if param1['MQTT_CONF']:
                 self.c = MQTTClient(CLIENT_ID, param1['MQTT_SERVER'])
@@ -184,7 +201,7 @@ class task1 (rtos_task):
         if self.oled:
             sensor = 'BME680' if self.bme680IsConnected else 'BME280'
             self.oled.set_sensor_config(sensor)
-            self.oled.update_screen(self.wifi_valid, self.mqtt_valid, utime.localtime(), None, None, str_text=str_out, version=param1['VERSION'])
+            self.oled.update_screen(self.wifi_valid, self.mqtt_valid, utime.localtime(), None, None, str_text=str_out, version=param1['VERSION'], page=0)
 
 # Task body
 #
@@ -272,12 +289,15 @@ class task1 (rtos_task):
 
                 # verify wifi connection, reconnect if dropped
                 sta_if = network.WLAN(network.STA_IF)
-                if not sta_if.isconnected() and param1['WIFI_CONF']:
+                was_connected = sta_if.isconnected()
+                if not was_connected and param1['WIFI_CONF']:
                     try:
                         wifi_connect(self._wifi_ssid, self._wifi_pass)
                     except Exception as e:
                         print("WiFi reconnect failed:", e)
                 self.wifi_valid = sta_if.isconnected()
+                if self.wifi_valid and not was_connected and self.oled:
+                    self.oled.set_system_info(sta_if.ifconfig()[0], param1['NODE_NAME'])
                 del sta_if
 
                 if self.wifi_valid:
@@ -317,12 +337,26 @@ class task1 (rtos_task):
                     print("Humidity:", humidity_str)
                     print("Pressure:", pressure_str)
 
-            if self.oledIsConnected:
-                str_sub_text = ' {:.1f} hPa'.format(p) if p is not None else None
-                self.oled.update_screen(self.wifi_valid, l_mqtt_valid, utime.localtime(), t, h, str_text=str_out, sub_text=str_sub_text)
-                
             self.l_pin.set_off()
             self.pin.value(0)
+
+            if self.oledIsConnected:
+                str_sub_text = ' {:.1f} hPa'.format(p) if p is not None else None
+                last_page = -1
+                # Poll button every 500 ms for the rest of the wakeup period,
+                # redrawing only on state change — gives <1 s button response.
+                deadline = utime.ticks_add(utime.ticks_ms(),
+                                           int(param1['WAKEUP_PERIOD']) * 1000 - 5000)
+                while utime.ticks_diff(deadline, utime.ticks_ms()) > 0:
+                    page = 1 if _btn_pressed(self._btn) else 0
+                    if page != last_page:
+                        self.oled.update_screen(self.wifi_valid, l_mqtt_valid,
+                                                utime.localtime(), t, h,
+                                                str_text=str_out,
+                                                sub_text=str_sub_text,
+                                                page=page)
+                        last_page = page
+                    utime.sleep_ms(500)
 
             gc.collect()
             yield None

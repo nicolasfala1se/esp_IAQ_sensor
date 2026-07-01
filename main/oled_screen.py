@@ -1,6 +1,7 @@
 import ssd1306, framebuf
 import main.freesans25 as font25
 import main.calibri10 as font10
+from utime import ticks_ms
 
 _bmp_wifi = bytearray(b'\x00\x03\x05\t\x11\xff\x11\xc9\x05\xe3\x00\xf0\x00\xf8\x00\xfc')
 _bmp_mqtt = bytearray(b'~\x02\x04\x02~\x00<Bb|\x00\x02~\x02\x00\x02~\x02\x00\x00')
@@ -24,6 +25,9 @@ class oled_screen(ssd1306.SSD1306_I2C):
         self._str_text = ""
         self._str_sub_text = ""
         self._str_version = ""
+        self._ip = ""
+        self._node_name = ""
+        self._sensor_name = ""
 
     def load_logo(self):
         self.print_scr(font25, "MqttS1", 0, 10)
@@ -31,7 +35,12 @@ class oled_screen(ssd1306.SSD1306_I2C):
         self.show()
 
     def set_sensor_config(self, sensor):
+        self._sensor_name = sensor
         self._fb_sensor = _FB_B6 if sensor == 'BME680' else _FB_B2
+
+    def set_system_info(self, ip, node_name):
+        self._ip = ip
+        self._node_name = node_name
 
     def _str_width(self, font, s):
         return sum(font.get_ch(c)[2] for c in s)
@@ -46,7 +55,26 @@ class oled_screen(ssd1306.SSD1306_I2C):
                 xpos, y)
             xpos += char_width
 
-    def update_screen(self, wifi_valid, mqtt_valid, tm, temp, hum, str_text=None, sub_text=None, version=None):
+    def _draw_page2(self):
+        self.fill(0)
+        # row 0: node name (truncated to 16 chars)
+        self.text(self._node_name[:16], 0, 0, 1)
+        # row 1: IP
+        self.text(self._ip[:16] if self._ip else "No IP", 0, 16, 1)
+        # row 2: sensor + version
+        sv = self._sensor_name + "  " + self._str_version
+        self.text(sv[:16], 0, 32, 1)
+        # row 3: uptime
+        uptime_min = ticks_ms() // 60000
+        self.text("Up:%dm" % uptime_min, 0, 48, 1)
+        self.show()
+
+    def update_screen(self, wifi_valid, mqtt_valid, tm, temp, hum, str_text=None, sub_text=None, version=None, page=0):
+        if version is not None:
+            self._str_version = version
+        if page == 1:
+            self._draw_page2()
+            return
         self.fill(0)
         if wifi_valid:
             self.blit(_FB_WIFI, 0, 0)
@@ -69,8 +97,6 @@ class oled_screen(ssd1306.SSD1306_I2C):
             self._str_text = str_text
         self.text(self._str_text, 0, 56, 1)
 
-        if version is not None:
-            self._str_version = version
         if self._str_version:
             self.text(self._str_version, 128 - len(self._str_version) * 8, 56, 1)
 

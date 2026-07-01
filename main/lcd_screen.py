@@ -34,6 +34,7 @@ _FG = _WHITE
 _LCD_GLYPH_BUF = bytearray(4800)
 
 
+
 class _ST7789V2:
     """Minimal write-only SPI driver for ST7789V2. No MISO, no external dependency."""
 
@@ -152,6 +153,8 @@ class lcd_screen:
         self._str_sub_text  = ""
         self._str_version   = ""
         self._sensor_name   = ""
+        self._ip            = ""
+        self._node_name     = ""
 
     def load_logo(self):
         self._tft.fill(_BG)
@@ -160,6 +163,10 @@ class lcd_screen:
 
     def set_sensor_config(self, sensor):
         self._sensor_name = sensor
+
+    def set_system_info(self, ip, node_name):
+        self._ip        = ip
+        self._node_name = node_name
 
     def show(self):
         pass  # LCD blits are immediate; present for interface compatibility
@@ -199,8 +206,29 @@ class lcd_screen:
 
     # ── main display update ──────────────────────────────────────────────────
 
+    def _draw_page2(self):
+        tft = self._tft
+        tft.fill(_BG)
+        tft.fill_rect(0, 32, 240, 2, _GRAY)
+        self._draw_str(font10, "Node:", 4, 4, _GRAY, scale=2)
+        self._draw_str(font10, self._node_name, 4, 38, _CYAN, scale=2)
+        tft.fill_rect(0, 72, 240, 1, _GRAY)
+        self._draw_str(font10, "IP:", 4, 80, _GRAY, scale=2)
+        self._draw_str(font10, self._ip if self._ip else "---", 4, 104, _WHITE, scale=2)
+        self._draw_str(font10, self._sensor_name, 4, 140, _YELLOW, scale=2)
+        if self._str_version:
+            self._draw_str(font10, "v" + self._str_version, 4, 164, _GRAY, scale=2)
+        import utime
+        uptime_min = utime.ticks_ms() // 60000
+        self._draw_str(font10, "Up:%dm" % uptime_min, 4, 200, _GRAY, scale=2)
+
     def update_screen(self, wifi_valid, mqtt_valid, tm, temp, hum,
-                      str_text=None, sub_text=None, version=None):
+                      str_text=None, sub_text=None, version=None, page=0):
+        if version is not None:
+            self._str_version = version
+        if page == 1:
+            self._draw_page2()
+            return
         tft = self._tft
         tft.fill(_BG)
 
@@ -242,8 +270,6 @@ class lcd_screen:
             self._draw_str(font25, self._str_text, 4, 200, _YELLOW)
 
         # ── version (below status text, right-justified) ─────────────────────
-        if version is not None:
-            self._str_version = version
         if self._str_version:
             vw = self._glyph_w(font10, self._str_version, scale=2)
             self._draw_str(font10, self._str_version, 240 - vw - 6, 235, _WHITE, scale=2)
